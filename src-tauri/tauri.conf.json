@@ -29,6 +29,7 @@
     "longDescription": "FilesCodeBox 桌面客户端：托盘常驻，一键连接你的文件快递柜。",
     "icon": [
       "icons/32x32.png",
+      "icons/icon.ico",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
