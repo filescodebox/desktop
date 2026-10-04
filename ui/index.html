@@ -54,7 +54,12 @@
     const { invoke } = window.__TAURI__.core;
     window.addEventListener('DOMContentLoaded', async () => {
       const saved = await invoke('get_saved');
-      if (saved) document.getElementById('url').value = saved;
+      if (saved) {
+        document.getElementById('url').value = saved;
+        // 有历史地址：自动重连（失败回落本设置页并显示错误）
+        try { await connect(); return; } catch (_) {}
+        document.getElementById('go').disabled = false;
+      }
       document.getElementById('url').focus();
       document.getElementById('url').addEventListener('keydown', e => {
         if (e.key === 'Enter') connect();
