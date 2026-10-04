@@ -22,4 +22,4 @@ cargo build          # 编译检查
 
 ## License
 
-MIT
+Apache-2.0
