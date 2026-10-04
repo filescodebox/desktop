@@ -74,10 +74,6 @@ fn read_saved_url(app: &tauri::AppHandle) -> String {
         .unwrap_or_default()
 }
 
-fn main() {
-    desktop_app_lib::run()
-}
-
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
