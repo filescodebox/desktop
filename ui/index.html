@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>FilesCodeBox</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(160deg, #eef1ff, #f7f8fa);
+    }
+    @media (prefers-color-scheme: dark) {
+      body { background: linear-gradient(160deg, #16181d, #0f1013); }
+      .card { background: #1d2026 !important; }
+      h1 { color: #e8eaf0 !important; }
+      .hint { color: #8a8f9c !important; }
+    }
+    .card {
+      width: 460px; padding: 40px 36px; border-radius: 16px; background: #fff;
+      box-shadow: 0 12px 40px rgba(30, 40, 90, 0.12); text-align: center;
+    }
+    .logo { width: 72px; height: 72px; border-radius: 16px; margin: 0 auto 18px; background: #5b5fe8;
+            display: flex; align-items: center; justify-content: center; }
+    .logo span { color: #fff; font-size: 34px; font-weight: 700; }
+    h1 { font-size: 22px; color: #222; margin-bottom: 6px; }
+    .hint { color: #888; font-size: 13px; margin-bottom: 24px; }
+    input {
+      width: 100%; padding: 11px 14px; border: 1px solid #d8dbe4; border-radius: 8px;
+      font-size: 14px; outline: none; margin-bottom: 14px;
+    }
+    input:focus { border-color: #5b5fe8; }
+    button {
+      width: 100%; padding: 12px; border: 0; border-radius: 8px; background: #5b5fe8;
+      color: #fff; font-size: 15px; cursor: pointer;
+    }
+    button:disabled { opacity: 0.6; cursor: default; }
+    .err { color: #d33; font-size: 13px; min-height: 18px; margin-top: 10px; }
+    .tip { margin-top: 18px; font-size: 12px; color: #aab; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo"><span>柜</span></div>
+    <h1>FilesCodeBox 桌面版</h1>
+    <p class="hint">连接你的文件快递柜服务器</p>
+    <input id="url" placeholder="服务器地址，如 http://10.44.129.215" />
+    <button id="go" onclick="connect()">连 接</button>
+    <div class="err" id="err"></div>
+    <p class="tip">连接后本窗口即服务器完整界面；<br/>托盘菜单可随时返回本设置页或退出。</p>
+  </div>
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    window.addEventListener('DOMContentLoaded', async () => {
+      const saved = await invoke('get_saved');
+      if (saved) document.getElementById('url').value = saved;
+      document.getElementById('url').focus();
+      document.getElementById('url').addEventListener('keydown', e => {
+        if (e.key === 'Enter') connect();
+      });
+    });
+    async function connect() {
+      const url = document.getElementById('url').value.trim();
+      const err = document.getElementById('err');
+      err.textContent = '';
+      document.getElementById('go').disabled = true;
+      try {
+        await invoke('connect', { url });
+      } catch (e) {
+        err.textContent = String(e);
+        document.getElementById('go').disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

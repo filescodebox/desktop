@@ -1,0 +1,76 @@
+name: Release Desktop
+
+# desktop-v* tag → 三平台构建安装包 → 本仓 Release + 跨仓回挂 filescodebox/filescodebox
+on:
+  push:
+    tags: ["desktop-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+      - name: Linux 依赖
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+      - name: 构建并发布（tauri-action：产物进本仓 Release）
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "FilesCodeBox Desktop ${{ github.ref_name }}"
+          releaseBody: "三平台桌面客户端安装包。连接你的 FilesCodeBox 服务器即可使用。"
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.matrix_args || matrix.args }}
+
+  # 用户要求：最终产物回挂到生态主仓 filescodebox/filescodebox 的 Releases 页
+  publish-to-hub:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: 回挂产物到生态主仓
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # 等本仓 Release 的资产全部就位
+          sleep 30
+          # 主仓若无同名 Release 则创建（复用标题；无资产内容要求）
+          gh release view "$TAG" --repo filescodebox/filescodebox >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo filescodebox/filescodebox \
+              --title "FilesCodeBox Desktop $TAG" \
+              --notes "桌面客户端安装包（见 Assets）。服务器部署见主 README。"
+          # 把本仓 Release 的全部资产跨仓上传（同名覆盖）
+          for url in $(gh release view "$TAG" --repo filescodebox/filescodebox-desktop --json assets --jq '.assets[].url'); do
+            name=$(basename "$url")
+            gh release download "$TAG" --repo filescodebox/filescodebox-desktop --pattern "$name" --dir /tmp/assets --clobber || continue
+            gh release upload "$TAG" "/tmp/assets/$name" --repo filescodebox/filescodebox --clobber || true
+          done
+          echo "已回挂到 filescodebox/filescodebox Releases"
