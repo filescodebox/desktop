@@ -1,6 +1,15 @@
 # FilesCodeBox Desktop
 
+[![Tag](https://img.shields.io/github/v/tag/filescodebox/desktop)](https://github.com/filescodebox/desktop/tags)
+[![License](https://img.shields.io/github/license/filescodebox/desktop)](LICENSE)
+
 FilesCodeBox 文件快递柜桌面客户端（Tauri 2）。托盘常驻，一键连接你的文件快递柜服务器。
+
+> 🗂️ [FilesCodeBox 生态](https://github.com/orgs/filescodebox)成员仓 · 总览见 [装配仓 filescodebox](https://github.com/filescodebox/filescodebox)
+
+## 下载
+
+三平台安装包(Windows / macOS / Linux)统一发布在 [hub 仓 Releases](https://github.com/filescodebox/filescodebox/releases)(`desktop-v*` 资产);打 `desktop-v*` tag 后 CI 自动构建并回挂。
 
 ## 功能（v1 远程模式）
 
