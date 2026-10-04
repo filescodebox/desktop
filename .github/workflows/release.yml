@@ -50,14 +50,17 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
-  # 最终产物回挂生态主仓（产物放 filescodebox/filescodebox Releases）
+  # 最终产物回挂生态主仓（产物放 filescodebox/filescodebox Releases）。
+  # 跨仓操作 GITHUB_TOKEN 无权限，需在仓库 Secrets 配 DESKTOP_PAT（hub 仓写权限的 PAT）；
+  # 未配置时本 job 允许失败（continue-on-error），回挂由本地 `gh release upload` 完成。
   publish-to-hub:
     needs: build
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: 回挂产物到生态主仓
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.DESKTOP_PAT || secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           sleep 30
