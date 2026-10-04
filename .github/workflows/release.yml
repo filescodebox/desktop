@@ -69,7 +69,7 @@ jobs:
               --title "FilesCodeBox Desktop $TAG" \
               --notes "桌面客户端安装包（见 Assets）。服务器部署见主 README。"
           mkdir -p /tmp/assets
-          gh release download "$TAG" --repo filescodebox/filescodebox-desktop --dir /tmp/assets --clobber || true
+          gh release download "$TAG" --repo filescodebox/desktop --dir /tmp/assets --clobber || true
           for f in /tmp/assets/*; do
             [ -f "$f" ] || continue
             gh release upload "$TAG" "$f" --repo filescodebox/filescodebox --clobber || true
