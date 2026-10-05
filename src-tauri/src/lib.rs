@@ -5,12 +5,22 @@
 //     此后主窗即服务器 Web UI（托盘「显示主窗」随时唤回设置页）。
 //   - 地址持久化在应用数据目录（config.json），下次启动自动重连。
 //   - 信任模型：远程页面运行在主 webview 中但只暴露 connect/get_saved/save_url
-//     三个无危险命令（withGlobalTauri 注入的 API 面即以上）；关闭窗口=退出。
+//     等无危险命令（withGlobalTauri 注入的 API 面即以上）；关闭窗口=退出。
+//
+// 设备直传（v1.3+）：内嵌 p2pc sidecar（tauri externalBin，构建期按 target
+// triple 注入 binaries/p2pc-<triple>），Rust 侧 spawn 并把 stdout/stderr 以
+// `p2p-log` 事件流式回传设置页；同一时刻至多一个传输进程（p2p_cancel 终止）。
+// sidecar 从 Rust 调用，不经 JS capability 权限面；远端页面拿不到这些命令
+// （导航走 http(s) origin，__TAURI__ 注入仅存在于内置设置页）。
+use std::sync::Mutex;
+
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager, Url,
+    Emitter, Manager, Url,
 };
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
+use tauri_plugin_shell::ShellExt;
 
 #[tauri::command]
 fn get_saved(app: tauri::AppHandle) -> String {
@@ -74,13 +84,199 @@ fn read_saved_url(app: &tauri::AppHandle) -> String {
         .unwrap_or_default()
 }
 
+// ── p2pc 设备直传（sidecar） ─────────────────────────────────────────
+
+/// 单会话状态：同时至多一个 p2pc 进程（send/recv 共用）。
+struct P2pSession(Mutex<Option<CommandChild>>);
+
+#[tauri::command]
+fn get_p2p_registry(app: tauri::AppHandle) -> String {
+    read_app_data_file(&app, "p2p_registry.txt")
+}
+
+#[tauri::command]
+fn save_p2p_registry(app: tauri::AppHandle, registry: String) -> Result<(), String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app data dir: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("create dir: {e}"))?;
+    std::fs::write(dir.join("p2p_registry.txt"), registry.trim())
+        .map_err(|e| format!("write registry: {e}"))?;
+    Ok(())
+}
+
+/// 探测 sidecar 可用性（设置页据此显隐直传面板）。
+#[tauri::command]
+async fn p2p_version(app: tauri::AppHandle) -> Result<String, String> {
+    let out = app
+        .shell()
+        .sidecar("p2pc")
+        .map_err(|e| format!("sidecar 解析失败: {e}"))?
+        .args(["-v"])
+        .output()
+        .await
+        .map_err(|e| format!("sidecar 执行失败: {e}"))?;
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(text.trim().to_string())
+}
+
+#[tauri::command]
+async fn p2p_send(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, P2pSession>,
+    file_path: String,
+    registry: String,
+) -> Result<(), String> {
+    let path = file_path.trim().to_string();
+    if path.is_empty() {
+        return Err("请选择要发送的文件".into());
+    }
+    if !std::path::Path::new(&path).is_file() {
+        return Err(format!("文件不存在: {path}"));
+    }
+    let registry = normalize_registry(&registry)?;
+    save_p2p_registry(app.clone(), registry.clone())?;
+    spawn_p2p(
+        &app,
+        state.inner(),
+        vec![
+            "send".into(),
+            path,
+            "--registry".into(),
+            registry,
+        ],
+    )
+}
+
+#[tauri::command]
+async fn p2p_recv(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, P2pSession>,
+    code: String,
+    registry: String,
+) -> Result<(), String> {
+    let code = code.trim().to_string();
+    if code.is_empty() {
+        return Err("请输入口令".into());
+    }
+    let registry = normalize_registry(&registry)?;
+    save_p2p_registry(app.clone(), registry.clone())?;
+    let dir = app
+        .path()
+        .download_dir()
+        .map_err(|e| format!("下载目录解析失败: {e}"))?;
+    let _ = std::fs::create_dir_all(&dir);
+    spawn_p2p(
+        &app,
+        state.inner(),
+        vec![
+            "recv".into(),
+            code,
+            "--registry".into(),
+            registry,
+            "--out".into(),
+            dir.to_string_lossy().to_string(),
+        ],
+    )
+}
+
+/// 终止当前直传进程。返回是否确有进程被终止。
+#[tauri::command]
+fn p2p_cancel(state: tauri::State<'_, P2pSession>) -> Result<bool, String> {
+    let mut guard = state.0.lock().map_err(|_| "会话锁异常".to_string())?;
+    Ok(guard.take().map(|child| child.kill().is_ok()).unwrap_or(false))
+}
+
+/// spawn p2pc 并把输出以 `p2p-log` 事件流式回传（kind: stdout|stderr|error|exit）。
+/// 进程终止后自动清空会话槽，允许下一次传输。
+fn spawn_p2p(
+    app: &tauri::AppHandle,
+    session: &P2pSession,
+    args: Vec<String>,
+) -> Result<(), String> {
+    let mut guard = session.0.lock().map_err(|_| "会话锁异常".to_string())?;
+    if guard.is_some() {
+        return Err("已有直传任务进行中，请等待完成或先取消".into());
+    }
+    let (mut rx, child) = app
+        .shell()
+        .sidecar("p2pc")
+        .map_err(|e| format!("sidecar 解析失败: {e}"))?
+        .args(args)
+        .spawn()
+        .map_err(|e| format!("sidecar 启动失败: {e}"))?;
+    *guard = Some(child);
+    drop(guard);
+
+    let emitter = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = rx.recv().await {
+            let payload = match event {
+                CommandEvent::Stdout(line) => {
+                    serde_json::json!({"kind": "stdout", "line": String::from_utf8_lossy(&line)})
+                }
+                CommandEvent::Stderr(line) => {
+                    serde_json::json!({"kind": "stderr", "line": String::from_utf8_lossy(&line)})
+                }
+                CommandEvent::Error(err) => serde_json::json!({"kind": "error", "line": err}),
+                CommandEvent::Terminated(status) => {
+                    if let Some(s) = emitter.try_state::<P2pSession>() {
+                        if let Ok(mut guard) = s.0.lock() {
+                            *guard = None;
+                        }
+                    }
+                    serde_json::json!({"kind": "exit", "code": status.code})
+                }
+                _ => continue,
+            };
+            let _ = emitter.emit("p2p-log", payload);
+        }
+    });
+    Ok(())
+}
+
+fn normalize_registry(raw: &str) -> Result<String, String> {
+    let t = raw.trim().trim_end_matches('/');
+    if t.is_empty() {
+        return Err("注册中心地址不能为空（即 p2pd 服务地址）".into());
+    }
+    if t.starts_with("http://") || t.starts_with("https://") {
+        Ok(t.to_string())
+    } else {
+        Ok(format!("http://{t}"))
+    }
+}
+
+fn read_app_data_file(app: &tauri::AppHandle, name: &str) -> String {
+    app.path()
+        .app_data_dir()
+        .ok()
+        .and_then(|dir| std::fs::read_to_string(dir.join(name)).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default()
+}
+
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
+        .manage(P2pSession(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             connect,
             get_saved,
             save_url,
-            open_settings
+            open_settings,
+            get_p2p_registry,
+            save_p2p_registry,
+            p2p_version,
+            p2p_send,
+            p2p_recv,
+            p2p_cancel
         ])
         .setup(|app| {
             // 托盘：左键/菜单「显示主窗」，菜单含「服务器设置」「退出」。

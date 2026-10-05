@@ -15,29 +15,48 @@
       body { background: linear-gradient(160deg, #16181d, #0f1013); }
       .card { background: #1d2026 !important; }
       h1 { color: #e8eaf0 !important; }
-      .hint { color: #8a8f9c !important; }
+      .hint, .tip { color: #8a8f9c !important; }
+      .log { background: #14161a !important; }
+      input { background: #14161a; border-color: #33363f !important; color: #e8eaf0; }
+      .code { color: #8f94ff !important; }
     }
     .card {
-      width: 460px; padding: 40px 36px; border-radius: 16px; background: #fff;
+      width: 480px; padding: 36px 36px 30px; border-radius: 16px; background: #fff;
       box-shadow: 0 12px 40px rgba(30, 40, 90, 0.12); text-align: center;
     }
-    .logo { width: 72px; height: 72px; border-radius: 16px; margin: 0 auto 18px; background: #5b5fe8;
+    .logo { width: 64px; height: 64px; border-radius: 14px; margin: 0 auto 14px; background: #5b5fe8;
             display: flex; align-items: center; justify-content: center; }
-    .logo span { color: #fff; font-size: 34px; font-weight: 700; }
-    h1 { font-size: 22px; color: #222; margin-bottom: 6px; }
-    .hint { color: #888; font-size: 13px; margin-bottom: 24px; }
+    .logo span { color: #fff; font-size: 30px; font-weight: 700; }
+    h1 { font-size: 20px; color: #222; margin-bottom: 4px; }
+    .hint { color: #888; font-size: 13px; margin-bottom: 18px; }
     input {
-      width: 100%; padding: 11px 14px; border: 1px solid #d8dbe4; border-radius: 8px;
-      font-size: 14px; outline: none; margin-bottom: 14px;
+      width: 100%; padding: 10px 13px; border: 1px solid #d8dbe4; border-radius: 8px;
+      font-size: 14px; outline: none; margin-bottom: 12px;
     }
     input:focus { border-color: #5b5fe8; }
     button {
-      width: 100%; padding: 12px; border: 0; border-radius: 8px; background: #5b5fe8;
-      color: #fff; font-size: 15px; cursor: pointer;
+      width: 100%; padding: 11px; border: 0; border-radius: 8px; background: #5b5fe8;
+      color: #fff; font-size: 14px; cursor: pointer;
     }
     button:disabled { opacity: 0.6; cursor: default; }
-    .err { color: #d33; font-size: 13px; min-height: 18px; margin-top: 10px; }
-    .tip { margin-top: 18px; font-size: 12px; color: #aab; line-height: 1.6; }
+    button.ghost { background: transparent; border: 1px solid #c9cdda; color: inherit; }
+    .err { color: #d33; font-size: 13px; min-height: 18px; margin-top: 8px; }
+    .tip { margin-top: 14px; font-size: 12px; color: #aab; line-height: 1.6; }
+    .divider { margin: 22px 0 16px; border: 0; border-top: 1px dashed #d8dbe4; }
+    .sec-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; color: inherit; }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; }
+    .code {
+      display: none; font-size: 22px; letter-spacing: 4px; font-weight: 700;
+      color: #4448d8; margin: 8px 0 2px; user-select: all;
+    }
+    .log {
+      display: none; text-align: left; margin-top: 10px; padding: 10px 12px;
+      background: #f4f5f9; border-radius: 8px; font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace;
+      max-height: 150px; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
+      color: #555;
+    }
+    .ok { color: #1a9c5c !important; }
   </style>
 </head>
 <body>
@@ -49,33 +68,136 @@
     <button id="go" onclick="connect()">连 接</button>
     <div class="err" id="err"></div>
     <p class="tip">连接后本窗口即服务器完整界面；<br/>托盘菜单可随时返回本设置页或退出。</p>
+
+    <hr class="divider" />
+    <div class="sec-title">设备直传（P2P，经中继/打洞，服务端只见密文）</div>
+
+    <input id="p2p-registry" placeholder="直传注册中心地址，如 http://p2p.example.com:12346" />
+
+    <div class="row" style="margin-bottom: 10px;">
+      <button class="ghost" id="pick" onclick="pickAndSend()">选择文件发送…</button>
+      <button class="ghost" id="recv" onclick="recv()">按口令接收</button>
+    </div>
+    <input id="p2p-code" placeholder="输入对方口令接收（存到系统下载目录）" />
+    <div class="code" id="p2p-mycode"></div>
+    <pre class="log" id="p2p-log"></pre>
+    <div class="row" style="margin-top: 10px;">
+      <button id="p2p-cancel" style="display:none" onclick="cancel()">取消传输</button>
+    </div>
+    <div class="err" id="p2p-err"></div>
+    <p class="tip" id="p2p-note">需要可达的 p2pd 注册中心；文件不落服务器。</p>
   </div>
+
   <script>
     const { invoke } = window.__TAURI__.core;
+    const $ = id => document.getElementById(id);
+
     window.addEventListener('DOMContentLoaded', async () => {
+      // 设备直传面板初始化(独立于服务器连接)
+      try {
+        $('p2p-registry').value = await invoke('get_p2p_registry');
+        await invoke('p2p_version'); // 探测 sidecar,失败则提示
+      } catch (e) {
+        $('p2p-note').textContent = '设备直传不可用：内置 p2pc 缺失（' + String(e).slice(0, 80) + '）';
+        for (const id of ['pick', 'recv', 'p2p-code', 'p2p-registry']) $(id).disabled = true;
+      }
+      const { listen } = window.__TAURI__.event;
+      await listen('p2p-log', ev => onP2pLog(ev.payload));
+
+      // 服务器连接(原有逻辑)
       const saved = await invoke('get_saved');
       if (saved) {
-        document.getElementById('url').value = saved;
-        // 有历史地址：自动重连（失败回落本设置页并显示错误）
+        $('url').value = saved;
         try { await connect(); return; } catch (_) {}
-        document.getElementById('go').disabled = false;
+        $('go').disabled = false;
       }
-      document.getElementById('url').focus();
-      document.getElementById('url').addEventListener('keydown', e => {
-        if (e.key === 'Enter') connect();
-      });
+      $('url').focus();
+      $('url').addEventListener('keydown', e => { if (e.key === 'Enter') connect(); });
     });
+
     async function connect() {
-      const url = document.getElementById('url').value.trim();
-      const err = document.getElementById('err');
-      err.textContent = '';
-      document.getElementById('go').disabled = true;
+      const url = $('url').value.trim();
+      $('err').textContent = '';
+      $('go').disabled = true;
       try {
         await invoke('connect', { url });
       } catch (e) {
-        err.textContent = String(e);
-        document.getElementById('go').disabled = false;
+        $('err').textContent = String(e);
+        $('go').disabled = false;
       }
+    }
+
+    // ── 设备直传 ──
+    let transferDone = true;
+
+    async function pickAndSend() {
+      resetP2p();
+      const path = await window.__TAURI__.dialog.open({ multiple: false });
+      if (!path) return;
+      start('send', { filePath: path });
+    }
+    async function recv() {
+      resetP2p();
+      const code = $('p2p-code').value.trim();
+      if (!code) { $('p2p-err').textContent = '请输入口令'; return; }
+      start('recv', { code });
+    }
+    async function start(cmd, extra) {
+      const registry = $('p2p-registry').value.trim();
+      if (!registry) { $('p2p-err').textContent = '请填写直传注册中心地址'; return; }
+      $('p2p-err').textContent = '';
+      setBusy(true, cmd === 'send' ? '发送中…' : '接收中…');
+      try {
+        await invoke(cmd === 'send' ? 'p2p_send' : 'p2p_recv', { registry, ...extra });
+        transferDone = false;
+      } catch (e) {
+        $('p2p-err').textContent = String(e);
+        setBusy(false);
+      }
+    }
+    async function cancel() {
+      try { await invoke('p2p_cancel'); } catch (_) {}
+    }
+
+    function onP2pLog(p) {
+      const log = $('p2p-log');
+      log.style.display = 'block';
+      if (p.kind === 'stdout') {
+        log.textContent += p.line + '\n';
+        log.scrollTop = log.scrollHeight;
+        // send 会打印口令 XXXX-XXXX-XXXX,提取后大字展示
+        const m = p.line.match(/\b([A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4})\b/);
+        if (m && !transferDone && !$('p2p-mycode').textContent) {
+          $('p2p-mycode').textContent = m[1];
+          $('p2p-mycode').style.display = 'block';
+        }
+      } else if (p.kind === 'stderr' || p.kind === 'error') {
+        log.textContent += p.line + '\n';
+        log.scrollTop = log.scrollHeight;
+      } else if (p.kind === 'exit') {
+        transferDone = true;
+        setBusy(false);
+        if (p.code === 0) {
+          $('p2p-mycode').classList.add('ok');
+          if (!$('p2p-mycode').textContent) $('p2p-mycode').textContent = '✓ 传输完成';
+          if ($('p2p-mycode').textContent.startsWith('✓') === false) $('p2p-mycode').textContent += ' ✓';
+        } else {
+          $('p2p-err').textContent = '传输异常退出（code ' + p.code + '），详见日志';
+        }
+      }
+    }
+    function resetP2p() {
+      $('p2p-err').textContent = '';
+      $('p2p-mycode').textContent = '';
+      $('p2p-mycode').style.display = 'none';
+      $('p2p-mycode').classList.remove('ok');
+      $('p2p-log').textContent = '';
+      $('p2p-log').style.display = 'none';
+    }
+    function setBusy(busy, label) {
+      for (const id of ['pick', 'recv', 'p2p-code', 'p2p-registry']) $(id).disabled = busy;
+      $('p2p-cancel').style.display = busy ? 'block' : 'none';
+      if (busy) $('p2p-cancel').textContent = label || '取消传输';
     }
   </script>
 </body>

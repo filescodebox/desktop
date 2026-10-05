@@ -38,6 +38,25 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+      # 设备直传 sidecar: p2pc 按 Tauri target triple 从 p2p 仓 Release 拉取
+      # (取最新版,desktop 与 p2p 列车解耦;tauri-build 校验 externalBin 存在,缺失即构建失败)
+      - name: 下载 p2pc sidecar
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "${{ runner.os }}:${{ matrix.args }}" in
+            macOS:*aarch64*) triple=aarch64-apple-darwin ;;
+            macOS:*)         triple=x86_64-apple-darwin ;;
+            Linux:*)         triple=x86_64-unknown-linux-gnu ;;
+            Windows:*)       triple=x86_64-pc-windows-msvc ;;
+            *) echo "::error::未知平台组合"; exit 1 ;;
+          esac
+          mkdir -p src-tauri/binaries
+          gh release download --repo filescodebox/p2p --pattern "p2pc-${triple}*" \
+            --dir src-tauri/binaries --clobber
+          chmod +x src-tauri/binaries/p2pc-* 2>/dev/null || true
+          ls -la src-tauri/binaries/
       - name: 构建并发布（tauri-action：产物进本仓 Release）
         uses: tauri-apps/tauri-action@v0
         env:
@@ -45,7 +64,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "FilesCodeBox Desktop ${{ github.ref_name }}"
-          releaseBody: "三平台桌面客户端安装包。连接你的 FilesCodeBox 服务器即可使用。"
+          releaseBody: "三平台桌面客户端安装包：连接你的 FilesCodeBox 服务器；内置 p2pc 支持设备间 P2P 直传（托盘→服务器设置→设备直传）。"
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}

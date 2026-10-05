@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"主窗默认能力:自定义命令默认放行;dialog 插件供设备直传选文件","local":true,"windows":["main"],"permissions":["core:default","dialog:default"]}}
