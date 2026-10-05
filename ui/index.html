@@ -116,7 +116,20 @@
     });
 
     async function connect() {
-      const url = $('url').value.trim();
+      let url = $('url').value.trim();
+      // 明文 HTTP 确认（2026-10-05 审计：无 scheme 时 Rust 侧默认补 http://，
+      // 内网 NAS 场景保留该便利，但须用户知情——凭据与分享内容明文传输）
+      const target = url.startsWith('http://') ? url
+        : (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(url)) ? 'http://' + url
+        : null;
+      const eff = target || url;
+      if (eff.startsWith('http://')) {
+        const host = eff.replace(/^http:\/\//, '').split(/[\/ :]/)[0];
+        const local = /^(localhost|127\.0\.0\.1|\[::1\]|192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.) /.test(host + ' ');
+        if (!local && !confirm('将以明文 HTTP 连接（内容与凭据不加密传输）。\n' + eff + '\n\n继续连接吗？')) {
+          return;
+        }
+      }
       $('err').textContent = '';
       $('go').disabled = true;
       try {
