@@ -23,6 +23,7 @@ FilesCodeBox 文件快递柜桌面客户端（Tauri 2）。托盘常驻，一键
 
 - 传输走 PAKE 口令认证 + UDP 打洞直连（失败自动回落加密中继），**服务端只见密文，文件不落服务器**——只需一个可达的 [p2pd 注册中心](https://github.com/filescodebox/p2p)（联邦部署见 chart `p2p.enabled` 或 `docker run`）
 - p2pc 以 Tauri sidecar 内嵌（CI 按 target triple 从 [p2p Releases](https://github.com/filescodebox/p2p/releases) 拉取 `p2pc-<triple>`），与 p2p 版本列车解耦
+- **传输协议 v2（desktop v1.3.1 起，p2pc 0.4+）与旧版互不兼容**：双端须升级到同版本，旧版互传首帧直接失败
 
 ## Roadmap
 
