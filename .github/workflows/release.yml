@@ -65,6 +65,7 @@ jobs:
       # runner 镜像悄悄抬高地板,产物在目标系统上 GLIBC_2.3x not found。
       - name: Linux 预编译
         if: runner.os == 'Linux'
+        working-directory: src-tauri
         run: cargo build --release
       - name: glibc 地板守卫（≤ 2.35）
         if: runner.os == 'Linux'
