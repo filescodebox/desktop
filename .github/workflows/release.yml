@@ -72,8 +72,11 @@ jobs:
         run: |
           BIN=src-tauri/target/release/filescodebox-desktop
           MAX=$(objdump -T "$BIN" | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -1)
+          MAX=${MAX#GLIBC_}
           echo "二进制引用的最高 glibc 符号版本: ${MAX:-（无 glibc 符号）}"
-          # 断言 MAX ≤ 2.35: [MAX, 2.35] 应为版本升序,乱序即超限
+          # 断言 MAX ≤ 2.35: [MAX, 2.35] 应为版本升序,乱序即超限。
+          # 坑:MAX 必须剥掉 GLIBC_ 前缀再比——带前缀时 sort -V 按字典序把
+          # "GLIBC_x" 排在 "2.35" 之后,守卫恒误报(2026-10-06 首跑实翻车)
           if [ -n "$MAX" ] && ! printf '%s\n2.35\n' "$MAX" | sort -VC; then
             echo "::error::glibc 地板超限（$MAX > 2.35）：检查 runner 镜像是否被更换——Linux arm64 必须用 ubuntu-22.04-arm（ubuntu-24.04-arm 的 glibc 2.39 超过 deepin 23/统信 V25 的 2.38）"
             exit 1
