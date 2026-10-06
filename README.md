@@ -11,6 +11,19 @@ FilesCodeBox 文件快递柜桌面客户端（Tauri 2）。托盘常驻，一键
 
 三平台安装包(Windows / macOS / Linux)统一发布在 [hub 仓 Releases](https://github.com/filescodebox/filescodebox/releases)(`desktop-v*` 资产);打 `desktop-v*` tag 后 CI 自动构建并回挂。
 
+### 平台支持矩阵
+
+| 平台 | 架构 | 安装包格式 |
+|---|---|---|
+| macOS | Apple Silicon / Intel | dmg |
+| Windows | x64 | msi / nsis |
+| Linux 通用 | amd64 / arm64 | deb / rpm / AppImage |
+
+Linux 版依赖**系统提供的 webkit2gtk-4.1（libsoup3）**，要求 **glibc ≥ 2.35**（CI 在 ubuntu-22.04 / ubuntu-22.04-arm 构建，发布前有 glibc 地板守卫）：
+
+- ✅ 适配目标：deepin 23+、统信 UOS 桌面专业版 **V25（2500）**、银河麒麟桌面 **V11**，以及 Ubuntu 22.04+ / Debian 12+ 等通用发行版（统信/麒麟上架前需真机验证：`ldd --version`、`apt policy libwebkit2gtk-4.1-0`）
+- ❌ **不支持**信创老底座：统信 UOS V20 全系（1050/1060/1070，Debian 10 底座，glibc 2.28 且系统无 webkit2gtk-4.1）、银河麒麟桌面 V10 SP1（glibc 2.31）。替代：浏览器访问服务器 Web UI（功能完整）+ [p2pc-web 网页模式](https://github.com/filescodebox/p2p/releases)（老底座专用：单静态二进制本地界面，内置 p2p 直传）
+
 ## 功能（v1 远程模式）
 
 - 服务器地址持久化，启动自动重连
@@ -30,6 +43,7 @@ FilesCodeBox 文件快递柜桌面客户端（Tauri 2）。托盘常驻，一键
 - [ ] 本机模式：内嵌 server 二进制（sidecar），一键把电脑变成文件柜
 - [ ] 直传多文件/目录、进度条与速度显示
 - [ ] 开机自启、消息通知原生集成
+- [ ] 信创老底座适配线（统信 V20 全系 / 麒麟 V10 SP1）：p2pc-web 网页模式已在 [p2p 仓](https://github.com/filescodebox/p2p)落地（单静态二进制，回环 Web UI + 内置直传），满足不了再评估 GTK3 原生壳；Tauri 2 依赖 webkit2gtk-4.1，老底座确定走不通，不采用 Tauri 1.x 双轨
 
 ## 开发
 

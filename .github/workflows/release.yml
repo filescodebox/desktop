@@ -1,6 +1,6 @@
 name: Release Desktop
 
-# desktop-v* tag → 三平台构建安装包 → 本仓 Release + 跨仓回挂 filescodebox/filescodebox
+# desktop-v* tag → 三平台构建安装包（Linux amd64+arm64 双架构）→ 本仓 Release + 跨仓回挂 filescodebox/filescodebox
 on:
   push:
     tags: ["desktop-v*"]
@@ -16,12 +16,21 @@ jobs:
         include:
           - platform: macos-latest
             args: --target aarch64-apple-darwin
+            triple: aarch64-apple-darwin
           - platform: macos-latest
             args: --target x86_64-apple-darwin
+            triple: x86_64-apple-darwin
+          # Linux arm64 用 22.04(非 24.04): 构建机 glibc ≈ 产物地板,
+          # 24.04 的 2.39 超过 deepin 23/统信 V25 的 2.38;守卫见下方步骤
           - platform: ubuntu-22.04
             args: ""
+            triple: x86_64-unknown-linux-gnu
+          - platform: ubuntu-22.04-arm
+            args: ""
+            triple: aarch64-unknown-linux-gnu
           - platform: windows-latest
             args: ""
+            triple: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -34,29 +43,40 @@ jobs:
       - name: Rust cache
         uses: swatinem/rust-cache@v2
       - name: Linux 依赖
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.platform, 'ubuntu-')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
       # 设备直传 sidecar: p2pc 按 Tauri target triple 从 p2p 仓 Release 拉取
-      # (取最新版,desktop 与 p2p 列车解耦;tauri-build 校验 externalBin 存在,缺失即构建失败)
+      # (triple 显式列在 matrix,取最新版,desktop 与 p2p 列车解耦;tauri-build 校验
+      # externalBin 存在,缺失即构建失败)
       - name: 下载 p2pc sidecar
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          case "${{ runner.os }}:${{ matrix.args }}" in
-            macOS:*aarch64*) triple=aarch64-apple-darwin ;;
-            macOS:*)         triple=x86_64-apple-darwin ;;
-            Linux:*)         triple=x86_64-unknown-linux-gnu ;;
-            Windows:*)       triple=x86_64-pc-windows-msvc ;;
-            *) echo "::error::未知平台组合"; exit 1 ;;
-          esac
           mkdir -p src-tauri/binaries
-          gh release download --repo filescodebox/p2p --pattern "p2pc-${triple}*" \
+          gh release download --repo filescodebox/p2p --pattern "p2pc-${{ matrix.triple }}*" \
             --dir src-tauri/binaries --clobber
           chmod +x src-tauri/binaries/p2pc-* 2>/dev/null || true
           ls -la src-tauri/binaries/
+      # Linux 预编译 + glibc 地板守卫: 产物引用的 glibc 符号版本 ≈ 构建机 glibc。
+      # 钉死 ≤2.35(适配 deepin 23/统信 V25/麒麟 V11 的 2.38 一档),防止未来更换
+      # runner 镜像悄悄抬高地板,产物在目标系统上 GLIBC_2.3x not found。
+      - name: Linux 预编译
+        if: runner.os == 'Linux'
+        run: cargo build --release
+      - name: glibc 地板守卫（≤ 2.35）
+        if: runner.os == 'Linux'
+        run: |
+          BIN=src-tauri/target/release/filescodebox-desktop
+          MAX=$(objdump -T "$BIN" | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -1)
+          echo "二进制引用的最高 glibc 符号版本: ${MAX:-（无 glibc 符号）}"
+          # 断言 MAX ≤ 2.35: [MAX, 2.35] 应为版本升序,乱序即超限
+          if [ -n "$MAX" ] && ! printf '%s\n2.35\n' "$MAX" | sort -VC; then
+            echo "::error::glibc 地板超限（$MAX > 2.35）：检查 runner 镜像是否被更换——Linux arm64 必须用 ubuntu-22.04-arm（ubuntu-24.04-arm 的 glibc 2.39 超过 deepin 23/统信 V25 的 2.38）"
+            exit 1
+          fi
       - name: 构建并发布（tauri-action：产物进本仓 Release）
         uses: tauri-apps/tauri-action@v0
         env:
@@ -64,7 +84,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "FilesCodeBox Desktop ${{ github.ref_name }}"
-          releaseBody: "三平台桌面客户端安装包：连接你的 FilesCodeBox 服务器；内置 p2pc 支持设备间 P2P 直传（托盘→服务器设置→设备直传）。"
+          releaseBody: "桌面客户端安装包（Windows / macOS / Linux amd64+arm64）：连接你的 FilesCodeBox 服务器；内置 p2pc 支持设备间 P2P 直传（托盘→服务器设置→设备直传）。Linux 适配范围见 README 支持矩阵。"
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
