@@ -34,6 +34,17 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+      - name: 版本一致性断言(tauri.conf.json/Cargo.toml 与 tag 对齐)
+        shell: bash
+        run: |
+          VER="${{ github.ref_name }}"
+          if [ -f VERSION ]; then
+            [ "$(cat VERSION)" = "${VER#desktop-v}" ] || { echo "::error::VERSION=$(cat VERSION) ≠ tag $VER——发版走 hub 列车 bump,勿手改 VERSION"; exit 1; }
+          fi
+          V1=$(grep -m1 '"version":' src-tauri/tauri.conf.json | sed 's/[^0-9.]*//g')
+          V2=$(grep -m1 '^version = ' src-tauri/Cargo.toml | sed 's/[^0-9.]*//g')
+          [ "$V1" = "${VER#desktop-v}" ] && [ "$V2" = "${VER#desktop-v}" ] \
+            || { echo "::error::版本双写不一致 tag=$VER tauri=$V1 cargo=$V2——发版走 hub 列车 bump"; exit 1; }
       - uses: actions/setup-node@v4
         with: { node-version: "20" }
       - name: Rust setup
@@ -48,16 +59,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
       # 设备直传 sidecar: p2pc 按 Tauri target triple 从 p2p 仓 Release 拉取
-      # (triple 显式列在 matrix,取最新版,desktop 与 p2p 列车解耦;tauri-build 校验
-      # externalBin 存在,缺失即构建失败)
-      - name: 下载 p2pc sidecar
+      # (triple 显式列在 matrix;版本钉 DEPS.env 的 P2PC_REF——2026-10-08 起不再取
+      # latest,p2p wire 破坏性变更(v0.4.0 有先例)必须随列车同版推进;tauri-build
+      # 校验 externalBin 存在,缺失即构建失败)
+      - name: 下载 p2pc sidecar(钉版)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          P2PC_REF=$(grep -E '^P2PC_REF=' DEPS.env 2>/dev/null | cut -d= -f2 || true)
+          if [ -z "$P2PC_REF" ]; then
+            echo "::warning::无 DEPS.env(前列车 tag),sidecar 回退 latest Release(不可复现,下一列车起钉版)"
+            P2PC_REF=$(gh release view -R pigeonbox/p2p --json tagName --jq .tagName)
+          fi
+          echo "P2PC_REF=$P2PC_REF" >> "$GITHUB_STEP_SUMMARY"
           mkdir -p src-tauri/binaries
-          gh release download --repo pigeonbox/p2p --pattern "p2pc-${{ matrix.triple }}*" \
-            --dir src-tauri/binaries --clobber
+          gh release download "$P2PC_REF" --repo pigeonbox/p2p \
+            --pattern "p2pc-${{ matrix.triple }}*" --dir src-tauri/binaries --clobber
           chmod +x src-tauri/binaries/p2pc-* 2>/dev/null || true
           ls -la src-tauri/binaries/
       # Linux 预编译 + glibc 地板守卫: 产物引用的 glibc 符号版本 ≈ 构建机 glibc。
@@ -94,11 +112,10 @@ jobs:
           args: ${{ matrix.args }}
 
   # 最终产物回挂生态主仓（产物放 pigeonbox/pigeonbox Releases）。
-  # 跨仓操作 GITHUB_TOKEN 无权限，需在仓库 Secrets 配 DESKTOP_PAT（hub 仓写权限的 PAT）；
-  # 未配置时本 job 允许失败（continue-on-error），回挂由本地 `gh release upload` 完成。
+  # 跨仓操作 GITHUB_TOKEN 无权限，需在仓库 Secrets 配 DESKTOP_PAT（hub 仓写权限的 PAT）。
+  # 断链必须响(2026-10-08 拔除 continue-on-error——PAT 失效静默放行只会让 hub 统一出口缺资产)。
   publish-to-hub:
     needs: build
-    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
       - name: 回挂产物到生态主仓
@@ -116,10 +133,16 @@ jobs:
               --latest=false \
               --notes "${NOTES}"
           mkdir -p /tmp/assets
-          gh release download "$TAG" --repo pigeonbox/desktop --dir /tmp/assets --clobber || true
+          # 等待 tauri-action 侧 Release 资产落盘(有重试,失败即响)
+          ok=0
+          for i in 1 2 3 4 5 6; do
+            if gh release download "$TAG" --repo pigeonbox/desktop --dir /tmp/assets --clobber; then ok=1; break; fi
+            sleep 20
+          done
+          [ "$ok" = 1 ] || { echo "::error::拉取本仓 Release 资产失败"; exit 1; }
           for f in /tmp/assets/*; do
             [ -f "$f" ] || continue
-            gh release upload "$TAG" "$f" --repo pigeonbox/pigeonbox --clobber || true
+            gh release upload "$TAG" "$f" --repo pigeonbox/pigeonbox --clobber
           done
           # 组件回挂恒不为 Latest(Latest 属于 hub 生态快照 v*);release 已存在时也兜底纠偏
           gh release edit "$TAG" --repo pigeonbox/pigeonbox --latest=false || true
