@@ -1,6 +1,6 @@
 # 麒麟 / 统信应用商店上架材料包
 
-> 2026-10-06 整理，对应 desktop-v1.3.2（Linux amd64+arm64 双架构）。
+> 2026-10-06 整理，对应 desktop-v1.4.0（Linux amd64+arm64 双架构）。
 > 商店"提交审核"动作需登录开发者账号完成实名认证后人工执行；本文件把其余一切备齐。
 
 ## 0. 上架对象与边界
@@ -14,7 +14,7 @@
 
 ## 1. 安装包产物
 
-- Release：`pigeonbox/desktop` tag `desktop-v1.3.2`（同步回挂 `pigeonbox/pigeonbox` Release 同名 tag）
+- Release：`pigeonbox/desktop` tag `desktop-v1.4.0`（同步回挂 `pigeonbox/pigeonbox` Release 同名 tag）
 - 文件：`pigeonbox-desktop_1.3.2_amd64.deb`、`pigeonbox-desktop_1.3.2_arm64.deb`
 - 包名（identifier）：`com.pigeonbox.desktop`；copyright：`Copyright 2026 PigeonBox`（已写入 deb 元数据）
 - 运行时依赖：`libwebkit2gtk-4.1-0`、GTK3、`libsoup-3.0-0` 等（deb Depends 自动生成，apt 自动解决）
