@@ -1,4 +1,4 @@
-// FilesCodeBox 桌面客户端（Tauri 2）。
+// PigeonBox 桌面客户端（Tauri 2）。
 //
 // 设计（v1 远程模式）：
 //   - 主窗加载内置设置页，用户填服务器地址后经 `connect` 命令导航到该地址，
@@ -286,7 +286,7 @@ pub fn run() {
             let menu = Menu::with_items(app, &[&show, &settings, &quit])?;
             TrayIconBuilder::with_id("main-tray")
                 .icon(app.default_window_icon().unwrap().clone())
-                .tooltip("FilesCodeBox")
+                .tooltip("PigeonBox")
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {

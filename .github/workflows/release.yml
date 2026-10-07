@@ -1,6 +1,6 @@
 name: Release Desktop
 
-# desktop-v* tag → 三平台构建安装包（Linux amd64+arm64 双架构）→ 本仓 Release + 跨仓回挂 filescodebox/filescodebox
+# desktop-v* tag → 三平台构建安装包（Linux amd64+arm64 双架构）→ 本仓 Release + 跨仓回挂 pigeonbox/pigeonbox
 on:
   push:
     tags: ["desktop-v*"]
@@ -56,7 +56,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p src-tauri/binaries
-          gh release download --repo filescodebox/p2p --pattern "p2pc-${{ matrix.triple }}*" \
+          gh release download --repo pigeonbox/p2p --pattern "p2pc-${{ matrix.triple }}*" \
             --dir src-tauri/binaries --clobber
           chmod +x src-tauri/binaries/p2pc-* 2>/dev/null || true
           ls -la src-tauri/binaries/
@@ -70,7 +70,7 @@ jobs:
       - name: glibc 地板守卫（≤ 2.35）
         if: runner.os == 'Linux'
         run: |
-          BIN=src-tauri/target/release/filescodebox-desktop
+          BIN=src-tauri/target/release/pigeonbox-desktop
           MAX=$(objdump -T "$BIN" | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -1)
           MAX=${MAX#GLIBC_}
           echo "二进制引用的最高 glibc 符号版本: ${MAX:-（无 glibc 符号）}"
@@ -87,13 +87,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "FilesCodeBox Desktop ${{ github.ref_name }}"
-          releaseBody: "桌面客户端安装包（Windows / macOS / Linux amd64+arm64）：连接你的 FilesCodeBox 服务器；内置 p2pc 支持设备间 P2P 直传（托盘→服务器设置→设备直传）。Linux 适配范围见 README 支持矩阵。"
+          releaseName: "PigeonBox Desktop ${{ github.ref_name }}"
+          releaseBody: "桌面客户端安装包（Windows / macOS / Linux amd64+arm64）：连接你的 PigeonBox 服务器；内置 p2pc 支持设备间 P2P 直传（托盘→服务器设置→设备直传）。Linux 适配范围见 README 支持矩阵。"
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
 
-  # 最终产物回挂生态主仓（产物放 filescodebox/filescodebox Releases）。
+  # 最终产物回挂生态主仓（产物放 pigeonbox/pigeonbox Releases）。
   # 跨仓操作 GITHUB_TOKEN 无权限，需在仓库 Secrets 配 DESKTOP_PAT（hub 仓写权限的 PAT）；
   # 未配置时本 job 允许失败（continue-on-error），回挂由本地 `gh release upload` 完成。
   publish-to-hub:
@@ -108,19 +108,19 @@ jobs:
         run: |
           sleep 30
           VER="${TAG#desktop-}"
-          NOTES=$(printf '%s\n\n---\n🗂 **组件仓库**: [filescodebox/desktop](https://github.com/filescodebox/desktop) · **完整变更日志**: [%s](https://github.com/filescodebox/desktop/releases/tag/%s)\n🌐 **生态总览 / Latest**: [filescodebox/filescodebox](https://github.com/filescodebox/filescodebox/releases/latest)\n' \
+          NOTES=$(printf '%s\n\n---\n🗂 **组件仓库**: [pigeonbox/desktop](https://github.com/pigeonbox/desktop) · **完整变更日志**: [%s](https://github.com/pigeonbox/desktop/releases/tag/%s)\n🌐 **生态总览 / Latest**: [pigeonbox/pigeonbox](https://github.com/pigeonbox/pigeonbox/releases/latest)\n' \
             "桌面客户端安装包（见 Assets）。服务器部署见主 README。" "${TAG}" "${TAG}")
-          gh release view "$TAG" --repo filescodebox/filescodebox >/dev/null 2>&1 || \
-            gh release create "$TAG" --repo filescodebox/filescodebox \
-              --title "FilesCodeBox Desktop $VER" \
+          gh release view "$TAG" --repo pigeonbox/pigeonbox >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo pigeonbox/pigeonbox \
+              --title "PigeonBox Desktop $VER" \
               --latest=false \
               --notes "${NOTES}"
           mkdir -p /tmp/assets
-          gh release download "$TAG" --repo filescodebox/desktop --dir /tmp/assets --clobber || true
+          gh release download "$TAG" --repo pigeonbox/desktop --dir /tmp/assets --clobber || true
           for f in /tmp/assets/*; do
             [ -f "$f" ] || continue
-            gh release upload "$TAG" "$f" --repo filescodebox/filescodebox --clobber || true
+            gh release upload "$TAG" "$f" --repo pigeonbox/pigeonbox --clobber || true
           done
           # 组件回挂恒不为 Latest(Latest 属于 hub 生态快照 v*);release 已存在时也兜底纠偏
-          gh release edit "$TAG" --repo filescodebox/filescodebox --latest=false || true
-          echo "已回挂到 filescodebox/filescodebox Releases"
+          gh release edit "$TAG" --repo pigeonbox/pigeonbox --latest=false || true
+          echo "已回挂到 pigeonbox/pigeonbox Releases"

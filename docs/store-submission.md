@@ -7,30 +7,30 @@
 
 | 对象 | 系统 | 形态 | 状态 |
 |---|---|---|---|
-| FilesCodeBox 桌面客户端 | 统信 UOS **V25(2500)** / 麒麟桌面 **V11** / deepin 23+ | Tauri deb（amd64+arm64） | **本次上架**，deb 依赖 `libwebkit2gtk-4.1-0` |
+| PigeonBox 桌面客户端 | 统信 UOS **V25(2500)** / 麒麟桌面 **V11** / deepin 23+ | Tauri deb（amd64+arm64） | **本次上架**，deb 依赖 `libwebkit2gtk-4.1-0` |
 | p2pc-web 网页模式 | 统信 UOS V20 全系 / 麒麟 V10 SP1（老底座存量） | 纯静态 Go 二进制打 deb | 可选 follow-up：老底座商店兼容性最好，单独立项 |
 
 老底座**不要**投 Tauri deb——目标系统没有 webkit2gtk-4.1，审核期或用户装机必挂。
 
 ## 1. 安装包产物
 
-- Release：`filescodebox/desktop` tag `desktop-v1.3.2`（同步回挂 `filescodebox/filescodebox` Release 同名 tag）
-- 文件：`filescodebox-desktop_1.3.2_amd64.deb`、`filescodebox-desktop_1.3.2_arm64.deb`
-- 包名（identifier）：`com.filescodebox.desktop`；copyright：`Copyright 2026 FilesCodeBox`（已写入 deb 元数据）
+- Release：`pigeonbox/desktop` tag `desktop-v1.3.2`（同步回挂 `pigeonbox/pigeonbox` Release 同名 tag）
+- 文件：`pigeonbox-desktop_1.3.2_amd64.deb`、`pigeonbox-desktop_1.3.2_arm64.deb`
+- 包名（identifier）：`com.pigeonbox.desktop`；copyright：`Copyright 2026 PigeonBox`（已写入 deb 元数据）
 - 运行时依赖：`libwebkit2gtk-4.1-0`、GTK3、`libsoup-3.0-0` 等（deb Depends 自动生成，apt 自动解决）
 
 ## 2. 共用材料
 
 ### 2.1 应用文案（两商店通用，可各自微调）
 
-- **应用名称**：FilesCodeBox 文件快递柜
+- **应用名称**：PigeonBox 文件快递柜
 - **一句话简介**：匿名口令分享文本与文件——私有化部署的文件快递柜，桌面客户端
 - **详细描述**：
-  > FilesCodeBox 桌面客户端：托盘常驻，一键连接你的文件快递柜服务器，主窗口即服务器完整界面（分享/取件/管理后台全功能）。内置设备直传：两台电脑经口令配对 P2P 直连传输（PAKE 口令认证 + UDP 打洞，失败自动回落加密中继），服务端只见密文、文件不落服务器。连接明文 HTTP 内网服务器时应用会主动提示。
+  > PigeonBox 桌面客户端：托盘常驻，一键连接你的文件快递柜服务器，主窗口即服务器完整界面（分享/取件/管理后台全功能）。内置设备直传：两台电脑经口令配对 P2P 直连传输（PAKE 口令认证 + UDP 打洞，失败自动回落加密中继），服务端只见密文、文件不落服务器。连接明文 HTTP 内网服务器时应用会主动提示。
 - **分类**：系统工具 → 文件传输（若商店要求单选：**系统工具**）
 - **标签/关键词**：文件传输、P2P、匿名分享、私有化、文件快递柜
 - **版本**：1.3.2
-- **官网/主页**：https://github.com/filescodebox/filescodebox
+- **官网/主页**：https://github.com/pigeonbox/pigeonbox
 - **开源许可**：Apache-2.0
 - **隐私合规要点**（审核常问）：应用不内置任何统计/遥测；用户数据仅在自己部署的服务器与点对端之间流动；开发者不收集任何数据。
 
@@ -56,7 +56,7 @@
 ## 3. 统信 UOS 应用商店（developer.uniontech.com）
 
 1. 注册开发者账号（个人或企业）→ **实名认证**（个人身份证；企业需营业执照，企业主体过审更快更稳）
-2. 创建应用：填 2.1 文案 + 包名 `com.filescodebox.desktop`
+2. 创建应用：填 2.1 文案 + 包名 `com.pigeonbox.desktop`
 3. 按**架构分别上传** deb（amd64 / arm64 各一个，商店按 CPU 型号分发）
 4. 上传图标 512×512 + 截图 + 隐私说明
 5. 提交审核。审核要点：依赖在目标版本源中可满足、桌面入口与图标正确、卸载无残留、无恶意行为
@@ -78,9 +78,9 @@ p2pc-web（p2p 仓 `cmd/p2pcweb`）是纯静态二进制，glibc 2.28 可跑，�
 # 在统信 V25 / 麒麟 V11 真机或虚拟机上：
 ldd --version                                   # 期望 ≥ 2.36
 apt policy libwebkit2gtk-4.1-0                  # 期望候选非 (无)
-sudo apt install ./filescodebox-desktop_1.3.2_amd64.deb
+sudo apt install ./pigeonbox-desktop_1.3.2_amd64.deb
 # 验证：应用菜单出现图标；启动→连接服务器→分享取件全流程；托盘常驻与菜单；
-#       设备直传收发；卸载 sudo apt remove filescodebox-desktop 无残留
+#       设备直传收发；卸载 sudo apt remove pigeonbox-desktop 无残留
 ```
 
 任一步失败先回来查，不要带病提审。V25/V11 若缺 webkit2gtk-4.1（与预判不符），暂停投商店，回到兼容矩阵重评。

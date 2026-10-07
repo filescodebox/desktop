@@ -787,7 +787,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "filescodebox-desktop"
+name = "pigeonbox-desktop"
 version = "1.0.0"
 dependencies = [
  "serde",

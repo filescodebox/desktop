@@ -1,7 +1,7 @@
 [package]
-name = "filescodebox-desktop"
+name = "pigeonbox-desktop"
 version = "1.0.0"
-description = "FilesCodeBox 桌面客户端——托盘常驻连接你的文件快递柜"
+description = "PigeonBox 桌面客户端——托盘常驻连接你的文件快递柜"
 edition = "2021"
 
 [lib]
