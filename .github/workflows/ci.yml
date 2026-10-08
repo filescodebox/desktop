@@ -19,10 +19,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
       # 编译门禁：此前仓内无任何 CI 检查，编译回归要到发版打包才暴露
+      # Cargo.toml 在 src-tauri/ 子目录，cargo 全程带 manifest-path
       - name: cargo check
-        run: cargo check --workspace
+        run: cargo check --workspace --manifest-path src-tauri/Cargo.toml
       - name: cargo test
-        run: cargo test --workspace
+        run: cargo test --workspace --manifest-path src-tauri/Cargo.toml
       # 告警先观察，收敛为 0 后再加 -D warnings 升门禁
       - name: cargo clippy
-        run: cargo clippy --workspace
+        run: cargo clippy --workspace --manifest-path src-tauri/Cargo.toml
