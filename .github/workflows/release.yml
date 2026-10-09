@@ -4,12 +4,20 @@ name: Release Desktop
 on:
   push:
     tags: ["desktop-v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '目标版本(现有 tag 名,如 desktop-v1.15.0)。仅重跑打包+双挂'
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
   build:
+    env:
+      REL_TAG: ${{ inputs.version || github.ref_name }}
     strategy:
       fail-fast: false
       matrix:
@@ -34,10 +42,12 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.REL_TAG }}
       - name: 版本一致性断言(tauri.conf.json/Cargo.toml 与 tag 对齐)
         shell: bash
         run: |
-          VER="${{ github.ref_name }}"
+          VER="${{ env.REL_TAG }}"
           if [ -f VERSION ]; then
             [ "$(cat VERSION)" = "${VER#desktop-v}" ] || { echo "::error::VERSION=$(cat VERSION) ≠ tag $VER——发版走 hub 列车 bump,勿手改 VERSION"; exit 1; }
           fi
@@ -104,8 +114,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "PigeonBox Desktop ${{ github.ref_name }}"
+          tagName: ${{ env.REL_TAG }}
+          releaseName: "PigeonBox Desktop ${{ env.REL_TAG }}"
           releaseBody: "桌面客户端安装包（Windows / macOS / Linux amd64+arm64）：连接你的 PigeonBox 服务器；内置 p2pc 支持设备间 P2P 直传（托盘→服务器设置→设备直传）。Linux 适配范围见 README 支持矩阵。"
           releaseDraft: false
           prerelease: false
@@ -121,7 +131,7 @@ jobs:
       - name: 回挂产物到生态主仓
         env:
           GH_TOKEN: ${{ secrets.DESKTOP_PAT }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ env.REL_TAG }}
         run: |
           sleep 30
           VER="${TAG#desktop-}"
