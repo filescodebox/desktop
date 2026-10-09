@@ -11,7 +11,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
       - name: Linux 依赖(Tauri webkit2gtk-4.1)
