@@ -127,6 +127,8 @@ jobs:
   publish-to-hub:
     needs: build
     runs-on: ubuntu-latest
+    env:
+      REL_TAG: ${{ inputs.version || github.ref_name }}
     steps:
       - name: 回挂产物到生态主仓
         env:
