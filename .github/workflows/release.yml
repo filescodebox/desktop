@@ -41,7 +41,7 @@ jobs:
             triple: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ env.REL_TAG }}
       - name: 版本一致性断言(tauri.conf.json/Cargo.toml 与 tag 对齐)
